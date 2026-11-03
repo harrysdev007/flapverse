@@ -324,40 +324,41 @@ async function libraryAdapter(q, p) {
 }
 
 function adaptersFor(q, p, page = 1) {
+  const sourceOn = (key) => !p.src.length || p.src.includes(key) || (key === 'lemmy_global' && p.src.includes('lemmy'));
   if (p.tab === 'library') return page === 1 ? [{source:'library',run:()=>libraryAdapter(q,p)}] : [];
   const s = state.settings;
   const list = [];
-  if (!q && page === 1 && p.tab !== 'library') list.push({source:'classics',run:async()=>({items:state.lib.slice(0,12).map(m=>({...libItem(m),source:'classics',site:'Flapverse classics'}))})});
+  if (!q && page === 1 && p.tab !== 'library' && sourceOn('library')) list.push({source:'classics',run:async()=>({items:state.lib.slice(0,12).map(m=>({...libItem(m),source:'classics',site:'Flapverse classics'}))})});
   if (!q) {
-    if (enabled('lemmy')) list.push({ source: 'lemmy', run: async () => ({ items: await trendingLemmy({ communities: communities().slice(0, 12) }) }) });
-    if (enabled('bluesky')) list.push({ source: 'bluesky', run: async () => ({ items: await trendingBluesky() }) });
-    if (enabled('mastodon')) list.push({ source: 'mastodon', run: async () => ({ items: await trendingMastodon() }) });
-    if (enabled('reddit')) list.push({ source: 'reddit', run: async () => ({ items: (await fetchRedditPool({ subs: subs().slice(0, 4), count: 30 })).sort(() => Math.random() - 0.5) }) });
-    if (enabled('imgflip')) list.push({ source: 'imgflip', run: async () => ({ items: await fetchImgflip() }) });
-    if (enabled('library')) list.push({ source: 'library', run: () => libraryAdapter('', p) });
+    if (enabled('lemmy') && sourceOn('lemmy')) list.push({ source: 'lemmy', run: async () => ({ items: await trendingLemmy({ communities: communities().slice(0, Math.min(communities().length, 12 + 6 * (page - 1))), limit: 25 * page }) }) });
+    if (enabled('bluesky') && sourceOn('bluesky')) list.push({ source: 'bluesky', run: async () => ({ items: await trendingBluesky({ limit: 50 * page }) }) });
+    if (enabled('mastodon') && sourceOn('mastodon')) list.push({ source: 'mastodon', run: async () => ({ items: await trendingMastodon({ limit: 40 * page }) }) });
+    if (enabled('reddit') && sourceOn('reddit')) list.push({ source: 'reddit', run: async () => ({ items: (await fetchRedditPool({ subs: subs().slice(0, Math.min(subs().length, 4 + 2 * (page - 1))), count: 30 * page })).sort(() => Math.random() - 0.5) }) });
+    if (enabled('imgflip') && sourceOn('imgflip')) list.push({ source: 'imgflip', run: async () => ({ items: await fetchImgflip() }) });
+    if (enabled('library') && sourceOn('library')) list.push({ source: 'library', run: () => libraryAdapter('', p) });
     return list;
   }
-  if (enabled('lemmy')) list.push({ source: 'lemmy', run: ({ onPartial }) => searchLemmy(q, { communities: communities(), sort: p.sort, page, onPartial }) });
-  if (enabled('lemmy')) list.push({ source: 'lemmy_global', run: ({ onPartial }) => searchLemmyGlobal(q, { sort: p.sort, page, onPartial }) });
-  if (enabled('bluesky') && (page === 1 || s.sources.bluesky)) list.push({ source: 'bluesky', run: ({ onPartial, session }) => {
+  if (enabled('lemmy') && sourceOn('lemmy')) list.push({ source: 'lemmy', run: ({ onPartial }) => searchLemmy(q, { communities: communities(), sort: p.sort, page, onPartial }) });
+  if (enabled('lemmy') && sourceOn('lemmy_global')) list.push({ source: 'lemmy_global', run: ({ onPartial }) => searchLemmyGlobal(q, { sort: p.sort, page, onPartial }) });
+  if (enabled('bluesky') && sourceOn('bluesky') && (page === 1 || s.sources.bluesky)) list.push({ source: 'bluesky', run: ({ onPartial, session }) => {
     const cursor = page > 1 ? session.extra.bluesky?.next || '' : '';
     if (page > 1 && !cursor) return { skipped: true };
     return searchBluesky(q, { sort: p.sort, cursor, onPartial });
   } });
   if (page === 1) {
-    if (enabled('mastodon')) list.push({ source: 'mastodon', run: () => searchMastodon(q) });
-    if (enabled('reddit')) list.push({ source: 'reddit', run: () => searchReddit(q, { subs: subs() }) });
-    if (enabled('imgflip')) list.push({ source: 'imgflip', run: () => searchImgflip(q) });
-    if (enabled('library')) list.push({ source: 'library', run: () => libraryAdapter(q, p) });
+    if (enabled('mastodon') && sourceOn('mastodon')) list.push({ source: 'mastodon', run: () => searchMastodon(q) });
+    if (enabled('reddit') && sourceOn('reddit')) list.push({ source: 'reddit', run: () => searchReddit(q, { subs: subs() }) });
+    if (enabled('imgflip') && sourceOn('imgflip')) list.push({ source: 'imgflip', run: () => searchImgflip(q) });
+    if (enabled('library') && sourceOn('library')) list.push({ source: 'library', run: () => libraryAdapter(q, p) });
   }
-  if (enabled('tenor')) list.push({ source: 'tenor', run: ({ session }) => searchTenor(q, { key: s.tenorKey, safe: p.safe, pos: page > 1 ? session.extra.tenor?.next || '' : '' }) });
-  if (enabled('giphy')) list.push({ source: 'giphy', run: ({ session }) => searchGiphy(q, { key: s.giphyKey, safe: p.safe, offset: page > 1 ? session.extra.giphy?.next || 0 : 0 }) });
-  if (enabled('imgur')) list.push({ source: 'imgur', run: () => searchImgur(q, { clientId: s.imgurClientId, safe: p.safe, page }) });
+  if (enabled('tenor') && sourceOn('tenor')) list.push({ source: 'tenor', run: ({ session }) => searchTenor(q, { key: s.tenorKey, safe: p.safe, pos: page > 1 ? session.extra.tenor?.next || '' : '' }) });
+  if (enabled('giphy') && sourceOn('giphy')) list.push({ source: 'giphy', run: ({ session }) => searchGiphy(q, { key: s.giphyKey, safe: p.safe, offset: page > 1 ? session.extra.giphy?.next || 0 : 0 }) });
+  if (enabled('imgur') && sourceOn('imgur')) list.push({ source: 'imgur', run: () => searchImgur(q, { clientId: s.imgurClientId, safe: p.safe, page }) });
   return list;
 }
 
 function sessionFor(p) {
-  const key = JSON.stringify([p.q.toLowerCase(), p.sort, p.safe, state.settings.searchMode, p.tags, p.folder, p.tab === 'library']);
+  const key = JSON.stringify([p.q.toLowerCase(), p.sort, p.safe, state.settings.searchMode, p.tags, p.folder, p.tab === 'library', [...p.src].sort()]);
   let s = state.sessions.get(key);
   if (s && Date.now() - s.createdAt < 10 * 60000) return s;
   s = createSession(p.q, { sort: p.sort, safe: p.safe }, adaptersFor(p.q, p, 1));
@@ -400,7 +401,7 @@ async function renderResults(app, isStale) {
         ${tabs.map(([k, label, icon]) => `<a class="tab ${p.tab === k ? 'active' : ''}" href="${searchUrl({ ...state.route.params, tab: k, id: undefined, sel: undefined })}">${icon}${label}</a>`).join('')}
         <button class="tab right ${p.tools ? 'active' : ''}" data-action="tools">Tools</button>
       </nav>
-      <div class="tools-row ${p.tools || p.src.length || !p.safe ? '' : 'hidden'}">
+      <div class="tools-row ${state.route.name === 'home' || p.tools || p.src.length || !p.safe ? '' : 'hidden'}">
         <select class="gsel" data-param="sort" title="Sort">
           <option value="relevance" ${p.sort === 'relevance' ? 'selected' : ''}>Relevance</option>
           <option value="newest" ${p.sort === 'newest' ? 'selected' : ''}>Newest</option>
@@ -456,7 +457,7 @@ function renderBody(root, session, p) {
   else parts.push(imageGrid(shown, p));
 
   if (items.length > shown.length) parts.push(`<div class="more"><button class="gbtn" data-action="more">More results (${items.length - shown.length} more loaded)</button></div>`);
-  else if (p.q && session.done && p.tab !== 'library' && p.tab !== 'templates' && (enabled('lemmy') || enabled('bluesky') || enabled('tenor') || enabled('giphy') || enabled('imgur')) && session.page < 5) parts.push(`<div class="more"><button class="gbtn" data-action="load-more">Load more from the web</button></div>`);
+  if (session.done && p.tab !== 'library' && p.tab !== 'templates' && session.page < 5 && adaptersFor(p.q, p, session.page + 1).length) parts.push(`<div class="more"><button class="gbtn" data-action="load-more">Load more memes from selected sources</button></div>`);
   root.innerHTML = parts.join('');
   if (p.q && session.done && items.length < 3 && state.settings.googleSuggest) {
     spellCorrection(p.q, { lang: lang() }).then((c) => {
@@ -1052,7 +1053,9 @@ async function onAction(action, el, e) {
     case 'load-more': {
       const session = sessionFor(p);
       state.limit = (state.limit || state.settings.resultsPerPage) + state.settings.resultsPerPage;
-      session.extend(adaptersFor(p.q, p, session.page + 1));
+      const nextAdapters = adaptersFor(p.q, p, session.page + 1);
+      if (!nextAdapters.length) { toast('No more pages available from the selected sources'); break; }
+      session.extend(nextAdapters);
       break;
     }
     case 'open': go('search', { tab: 'images', ...state.route.params, id }); break;
