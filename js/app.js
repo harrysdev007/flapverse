@@ -1049,7 +1049,13 @@ async function onAction(action, el, e) {
     }
     case 'tools': go('search', { ...state.route.params, tools: p.tools ? undefined : '1' }); break;
     case 'toggle-select': state.selected.clear(); go('search', { ...state.route.params, sel: p.sel ? undefined : '1', id: undefined }); break;
-    case 'more': state.limit = (state.limit || state.settings.resultsPerPage) + state.settings.resultsPerPage; render(true); break;
+    case 'more': {
+      state.limit = (state.limit || state.settings.resultsPerPage) + state.settings.resultsPerPage;
+      const session = sessionFor(p);
+      registerItems(session);
+      renderBody($('#results-body'), session, p);
+      break;
+    }
     case 'load-more': {
       const session = sessionFor(p);
       state.limit = (state.limit || state.settings.resultsPerPage) + state.settings.resultsPerPage;
